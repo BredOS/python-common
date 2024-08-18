@@ -2,11 +2,12 @@ from setuptools import setup, find_packages
 
 setup(
     name='bredos',
-    version='0.1',
+    version='1.0',
     packages=find_packages(),
     install_requires=[
         'pyrunning',
         'pysetting',
+        'pyalpm'
     ],
     description='Common python functions used in BredOS applications',
     author='Panda',
