@@ -7,6 +7,8 @@ from pathlib import Path
 from concurrent.futures import ThreadPoolExecutor, as_completed
 
 dts_cache = {}
+DTB_PATH = Path("/boot/dtbs")
+PROC_DT = Path("/proc/device-tree")
 
 
 def force_quote(val: int | str) -> str:
