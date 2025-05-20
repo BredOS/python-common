@@ -19,6 +19,7 @@
 from threading import Lock
 from functools import wraps
 from time import monotonic
+import subprocess
 
 
 def debounce(wait):
@@ -95,3 +96,13 @@ def get_ram_size(unit: str = "KB") -> int:
     except FileNotFoundError:
         return 0
     return 0
+
+
+def elevated_file_write(filepath: str, content: str):
+    proc = subprocess.run(
+        ["pkexec", "tee", filepath], input=content.encode(), check=True
+    )
+
+
+def wrap_lines(lines: list, width: int) -> list:
+    return [wrapped for line in lines for wrapped in textwrap.wrap(line, width)]
