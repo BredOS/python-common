@@ -284,6 +284,54 @@ def identify_base_dtb() -> tuple | None:
         return None, "No exact match found (overlays likely applied)"
 
 
+def detect_efidir() -> str | None:
+    try:
+        df_output = subprocess.check_output(["df"], text=True)
+    except subprocess.CalledProcessError:
+        return None
+
+    boot_mounts = set()
+    for line in df_output.splitlines()[1:]:  # Skip header
+        parts = line.split()
+        if len(parts) < 6:
+            continue
+        mount_point = parts[5]
+        if mount_point.startswith("/boot"):
+            boot_mounts.add(mount_point)
+
+    if "/boot/efi" in boot_mounts:
+        return "/boot/efi"
+    elif "/boot" in boot_mounts:
+        return "/boot"
+    else:
+        return None
+
+
+def identify_overlays() -> list:
+    res = []
+    if booted_with_edk():
+        efi = detect_efidir()
+        if efi is None:
+            raise OSError("Failed to identify EFI Directory")
+
+        overlays_path = Path(efi) / "dtb" / "overlays"
+        if not overlays_path.exists() or not overlays_path.is_dir():
+            return res  # No overlays directory found
+
+        try:
+            for dtbo in overlays_path.rglob("*.dtbo"):
+                # Sanity check: only real files, not broken symlinks, etc.
+                if dtbo.is_file() and not dtbo.is_symlink():
+                    dtbof = str(dtbo.resolve(strict=True))
+                    dtbof = dtbof[dtbof.rfind("/") + 1 :]
+                    res.append(dtbof)
+        except:
+            pass
+    else:
+        pass
+    return res
+
+
 def diff_dts(base_dts, live_dts) -> list:
     base_lines = set(base_dts.splitlines())
     live_lines = set(live_dts.splitlines())
