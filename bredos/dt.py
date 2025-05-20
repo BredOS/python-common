@@ -54,10 +54,7 @@ def parse_uboot() -> dict:
 
 def encode_uboot(config: dict) -> str:
     lines = [
-        "## /etc/default/u-boot - AUTOMATICALLY GENERATED CONFIGURATION",
-        "",
-        "## Use bredos-config to update.",
-        "",
+        "## /etc/default/u-boot - configuration file",
     ]
     for key, val in config.items():
         if isinstance(val, list):
@@ -105,10 +102,7 @@ def parse_grub() -> dict:
 
 def encode_grub(config: dict) -> str:
     lines = [
-        "## /etc/default/grub - AUTOMATICALLY GENERATED CONFIGURATION",
-        "",
-        "## Use bredos-tools to update.",
-        "",
+        "## /etc/default/grub - configuration file",
     ]
     for key, val in config.items():
         if isinstance(val, list):
