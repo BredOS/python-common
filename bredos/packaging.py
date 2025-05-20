@@ -18,6 +18,7 @@
 
 from pyalpm import Handle as _Handle
 
+
 class handler:
     def __init__(self, dryrun=False):
         self._hd = _Handle(".", "/var/lib/pacman")

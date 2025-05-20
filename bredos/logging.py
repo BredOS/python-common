@@ -26,7 +26,13 @@ from functools import partial
 logger = None
 handler = None
 
-def setup_logging(logger_name: str, log_dir: str, log_name: str, console_default_log_level = logging.INFO) -> None:
+
+def setup_logging(
+    logger_name: str,
+    log_dir: str,
+    log_name: str,
+    console_default_log_level=logging.INFO,
+) -> None:
     """
     Setup logging
 
@@ -96,6 +102,7 @@ def get_logger() -> logging.Logger:
         raise ValueError("Logger has not been set up. Call setup_logging first.")
     return logger
 
+
 def get_handler() -> logging.Handler:
     """
     Get the configured logging handler instance.
@@ -112,7 +119,7 @@ def get_handler() -> logging.Handler:
 def rm_old_logs(log_dir_path: str, keep: int = 5) -> None:
     """
     Remove old logs from the log directory
-    
+
     Parameters:
     - log_dir_path: The path to the log directory
     - keep: The number of logs to keep. Default is 5
@@ -122,11 +129,10 @@ def rm_old_logs(log_dir_path: str, keep: int = 5) -> None:
         os.remove(logs[i])
 
 
-
 def lp(message, mode="info") -> None:
     """
     Log a message to the logger
-    
+
     Parameters:
     - message: The message to log
     - mode: The mode to log the message in. Default is "info"
@@ -154,14 +160,21 @@ def post_run_cmd(info, exitcode) -> None:
     Parameters:
     - info: The output of the command
     - exitcode: The exit code of the command
-    
+
     Returns: None
     """
     if exitcode:
         lp(f"Command failed with exit code {exitcode}", mode="error")
         raise Exception(f"Command failed with exit code {exitcode}")
 
-def lrun(cmd: list, shell: bool = False, silent: bool = False, cwd: str = ".", postrunfn: Callable = post_run_cmd) -> None:
+
+def lrun(
+    cmd: list,
+    shell: bool = False,
+    silent: bool = False,
+    cwd: str = ".",
+    postrunfn: Callable = post_run_cmd,
+) -> None:
     """
     Run a command and log the output
 
@@ -192,5 +205,3 @@ def lrun(cmd: list, shell: bool = False, silent: bool = False, cwd: str = ".", p
             do_send_output_to_post_run_function=True,
             do_send_exit_code_to_post_run_function=True,
         ).run_log_and_wait(logging_handler=handler)
-
-

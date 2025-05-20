@@ -42,7 +42,7 @@ def setup_translations(domain: str, lang: object = None) -> gettext.GNUTranslati
         gettext.textdomain(domain)
         translation = gettext.translation(domain, languages=[lang], fallback=True)
         translation.install()
-        return translation.gettext, translation.pgettext # type: ignore
+        return translation.gettext, translation.pgettext  # type: ignore
     else:
         gettext.bindtextdomain(domain)
         gettext.textdomain(domain)

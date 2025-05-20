@@ -20,6 +20,7 @@ from threading import Lock
 from functools import wraps
 from time import monotonic
 
+
 def debounce(wait):
     """
     Decorator that will postpone a function's
@@ -47,6 +48,7 @@ def debounce(wait):
 
     return decorator
 
+
 def detect_device() -> str:
     """
     Detect the device model
@@ -66,8 +68,9 @@ def detect_device() -> str:
                 return product_name_file.read().rstrip("\n")
         except FileNotFoundError:
             return "unknown"
-        
-def get_ram_size(unit: str = 'KB') -> int:
+
+
+def get_ram_size(unit: str = "KB") -> int:
     """
     Get the total RAM size in the system
 
@@ -81,15 +84,14 @@ def get_ram_size(unit: str = 'KB') -> int:
         with open("/proc/meminfo", "r") as meminfo:
             for line in meminfo:
                 if line.startswith("MemTotal:"):
-                    if unit == 'KB':
+                    if unit == "KB":
                         return int(line.split()[1])
-                    elif unit == 'MB':
+                    elif unit == "MB":
                         return int(line.split()[1]) / 1024
-                    elif unit == 'GB':
+                    elif unit == "GB":
                         return int(line.split()[1]) / 1024 / 1024
-                    elif unit == 'bytes':
+                    elif unit == "bytes":
                         return int(line.split()[1]) * 1024
     except FileNotFoundError:
         return 0
     return 0
-

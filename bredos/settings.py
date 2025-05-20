@@ -24,6 +24,7 @@ from pysetting import JSONConfiguration
 
 app_settings = None
 
+
 def load_settings(settings: Path, default_settings_path: Path) -> None:
     """
     Load the settings from the settings file
@@ -32,7 +33,7 @@ def load_settings(settings: Path, default_settings_path: Path) -> None:
         - Checks if the settings file exists
         - If not, creates it
         - If it does, loads the settings from it
-    
+
     Parameters:
     - settings: The path to the settings file
     - default_settings_path: The path to the default settings file
@@ -47,6 +48,7 @@ def load_settings(settings: Path, default_settings_path: Path) -> None:
     global app_settings
     app_settings = JSONConfiguration(settings)
 
+
 def settings_get(key: str) -> Any:
     """
     Get a setting from the settings file
@@ -58,18 +60,20 @@ def settings_get(key: str) -> Any:
     """
     return app_settings[key]
 
+
 def settings_set(key: str, value: Any) -> None:
     """
     Set a setting in the settings file
-    
+
     Parameters:
     - key: The key to set
     - value: The value to set the key to
-    
+
     Returns: None
     """
     app_settings[key] = value
     app_settings.write_data()
+
 
 def create_settings_file(settings: Path, default_settings_path: Path) -> None:
     """
@@ -78,7 +82,7 @@ def create_settings_file(settings: Path, default_settings_path: Path) -> None:
     Parameters:
     - settings: The path to the settings file
     - default_settings_path: The path to the default settings file
-    
+
     Returns: None
     """
     settings.parents[0].mkdir(parents=True, exist_ok=True)
