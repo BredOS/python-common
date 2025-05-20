@@ -1,6 +1,12 @@
+import os
+import re
 import shlex
+import hashlib
+import subprocess
 from pathlib import Path
 from concurrent.futures import ThreadPoolExecutor, as_completed
+
+dts_cache = {}
 
 
 def force_quote(val: int | str) -> str:
@@ -125,7 +131,7 @@ def serialize_extlinux_conf(config: dict) -> str:
     return "\n".join(lines).rstrip()
 
 
-def dt_gencache() -> dict:
+def gencache() -> dict:
     res = {"base": {}, "overlays": {}}
     try:
         dtb_root = Path("/boot/dtbs")
@@ -159,7 +165,7 @@ def dt_gencache() -> dict:
     return res
 
 
-def dt_detect_live() -> tuple:
+def detect_live() -> tuple:
     live_dts = fdt_hash_from_proc()
     if live_dts is None:
         return None, "Could not read live FDT"
