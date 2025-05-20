@@ -16,34 +16,37 @@ def force_quote(val: int | str) -> str:
 
 
 def parse_uboot() -> dict:
-    config = {}
-    with open("/etc/default/u-boot") as f:
-        for line in f:
-            line = line.strip()
-            if not line or line.startswith("#"):
-                continue
-            if "=" in line:
-                key, val = line.split("=", 1)
-                key = key.strip()
-                try:
-                    val = shlex.split(val, posix=True)
-                    val = val[0] if len(val) == 1 else val
-                    if isinstance(val, list):
-                        for i in range(len(val)):
-                            if val[i].isdigit():
+    config = {"U_BOOT_IS_SETUP": "false", "U_BOOT_PARAMETERS": "splash quiet"}
+    try:
+        with open("/etc/default/u-boot") as f:
+            for line in f:
+                line = line.strip()
+                if not line or line.startswith("#"):
+                    continue
+                if "=" in line:
+                    key, val = line.split("=", 1)
+                    key = key.strip()
+                    try:
+                        val = shlex.split(val, posix=True)
+                        val = val[0] if len(val) == 1 else val
+                        if isinstance(val, list):
+                            for i in range(len(val)):
+                                if val[i].isdigit():
+                                    try:
+                                        val[i] = int(val[i])
+                                    except:
+                                        pass
+                        elif isinstance(val, str):
+                            if val.isdigit():
                                 try:
-                                    val[i] = int(val[i])
+                                    val = int(val)
                                 except:
                                     pass
-                    elif isinstance(val, str):
-                        if val.isdigit():
-                            try:
-                                val = int(val)
-                            except:
-                                pass
-                    config[key] = val
-                except ValueError:
-                    config[key] = val.strip()
+                        config[key] = val
+                    except ValueError:
+                        config[key] = val.strip()
+    except:
+        pass
     return config
 
 
