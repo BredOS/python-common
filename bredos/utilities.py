@@ -106,3 +106,13 @@ def elevated_file_write(filepath: str, content: str):
 
 def wrap_lines(lines: list, width: int) -> list:
     return [wrapped for line in lines for wrapped in textwrap.wrap(line, width)]
+
+
+def match_filename(cut_filename: str, full_filenames: list) -> str | None:
+    cut_lower = cut_filename.lower()
+    matches = [
+        path
+        for path in full_filenames
+        if os.path.basename(path).lower().startswith(cut_lower)
+    ]
+    return matches[0] if len(matches) == 1 else None
