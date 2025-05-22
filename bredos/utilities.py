@@ -16,6 +16,7 @@
 #
 # SPDX-License-Identifier: GPL-3.0-or-later
 
+import os
 from threading import Lock
 from functools import wraps
 from time import monotonic
