@@ -335,6 +335,18 @@ def identify_overlays() -> list:
     return res
 
 
+def uefi_overriden() -> bool:
+    for path in ("/boot/efi/dtb/base/", "/boot/dtb/base/"):
+        try:
+            if os.path.isdir(path):
+                with os.scandir(path) as entries:
+                    if any(entry.is_file() for entry in entries):
+                        return True
+        except:
+            continue
+    return False
+
+
 def diff_dts(base_dts, live_dts) -> list:
     base_lines = set(base_dts.splitlines())
     live_lines = set(live_dts.splitlines())

@@ -17,7 +17,6 @@
 # SPDX-License-Identifier: GPL-3.0-or-later
 
 import os
-import atexit
 import random
 import string
 import secrets
@@ -27,6 +26,83 @@ from pathlib import Path
 from threading import Lock
 from functools import wraps
 from time import monotonic
+from typing import Iterator, Optional
+
+
+class CommandStream:
+    # Wrapper to help pretend the elevated streams are like Popen
+    def __init__(self, generator: Iterator[str], proc):
+        self._gen = generator
+        self._iter = iter(generator)
+        self._proc = proc
+        self.returncode = 1
+
+        self.stdin = proc.stdin
+        self.stdout = proc.stdout
+        self.stderr = proc.stderr
+
+    def __enter__(self):
+        return self
+
+    def __exit__(self, exc_type, exc_val, exc_tb):
+        if hasattr(self._gen, "close"):
+            try:
+                self.returncode = self._proc.returncode
+            except:
+                pass
+            self._gen.close()
+            self._proc = None
+
+    def __iter__(self):
+        return self
+
+    def __next__(self):
+        return next(self._iter)
+
+    def read(self) -> str:
+        return "".join(self._iter)
+
+    def readline(self) -> str:
+        try:
+            return next(self._iter)
+        except StopIteration:
+            return ""
+
+    def readlines(self) -> list[str]:
+        return list(self._iter)
+
+    def close(self):
+        if hasattr(self._gen, "close"):
+            try:
+                self.returncode = self._proc.returncode
+            except:
+                pass
+            self._gen.close()
+            self._proc = None
+
+    def wait(self):
+        if self._proc:
+            try:
+                self.returncode = self._proc.returncode
+            except:
+                pass
+            self._gen.close()
+            self._proc = None
+        return
+
+    def kill(self):
+        if self._proc:
+            try:
+                self.returncode = self._proc.returncode
+            except:
+                pass
+            self._proc.kill()
+            try:
+                self.returncode = self._proc.returncode
+            except:
+                pass
+            self._gen.close()
+            self._proc = None
 
 
 def debounce(wait):
@@ -192,16 +268,23 @@ while True:
                 sys.exit(1)
             continue
 
-        result = subprocess.run(line, shell=True, capture_output=True, text=True)
-        print(result.stdout, end='')
-        print(result.stderr, end='', file=sys.stderr)
-        print("[[EOC]]")
-        sys.stdout.flush()
-        sys.stderr.flush()
+        proc2 = subprocess.Popen(
+            line,
+            shell=True,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.STDOUT,
+            text=True,
+            bufsize=1,
+        )
+        # forward each line immediately
+        for out in proc2.stdout:
+            print(out, end='', flush=True)
+        proc2.wait()
+        # end-of-command marker
+        print("[[EOC]]", flush=True)
     except Exception as e:
-        print(f"ERR: {{e}}", file=sys.stderr)
-        print("[[EOC]]", file=sys.stderr)
-        sys.stderr.flush()
+        print(f"ERR: {{e}}", file=sys.stderr, flush=True)
+        print("[[EOC]]", flush=True)
 """
         self.script_path.write_text(code)
         self.script_path.chmod(0o600)
@@ -212,7 +295,7 @@ while True:
             ["pkexec", "python3", str(self.script_path)],
             stdin=subprocess.PIPE,
             stdout=subprocess.PIPE,
-            stderr=subprocess.STDOUT,
+            stderr=subprocess.PIPE,
             text=True,
             bufsize=1,
         )
@@ -225,18 +308,19 @@ while True:
             self.proc = None  # Cycle keys for security
             self.secret = secrets.token_hex(32)
             self.script_path = None
-            raise RuntimeError("Failed to authenticate with root elevator.")
+            raise RuntimeError("Failed to authenticate with authentication elevator.")
 
-    def run(self, cmd: str) -> str:
+    def run(self, cmd: str) -> CommandStream:
         if self.proc is None or self.proc.poll() is not None:
             self._spawn()
 
         self.proc.stdin.write(cmd + "\n")
         self.proc.stdin.flush()
 
-        output = []
-        for line in self.proc.stdout:
-            if line.strip() == "[[EOC]]":
-                break
-            output.append(line)
-        return "".join(output)
+        def generator():
+            for line in self.proc.stdout:
+                if "[[EOC]]" in line:
+                    break
+                yield line
+
+        return CommandStream(generator(), proc=self.proc)
