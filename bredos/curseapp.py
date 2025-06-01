@@ -275,15 +275,15 @@ def draw_menu(title: str, options: list):
                     current_row = 0
             elif key in (curses.KEY_ENTER, ord("\n")):
                 draw_list(title, options, selected=current_row)
-                time.sleep(0.08)
+                time.sleep(0.1)
                 draw_list(title, options, selected=current_row, special=True)
-                time.sleep(0.08)
+                time.sleep(0.1)
                 draw_list(title, options, selected=current_row)
-                time.sleep(0.08)
+                time.sleep(0.1)
                 draw_list(title, options, selected=current_row, special=True)
-                time.sleep(0.08)
+                time.sleep(0.1)
                 draw_list(title, options, selected=current_row)
-                time.sleep(0.08)
+                time.sleep(0.1)
                 return current_row
             elif key in (ord("q"), 27):  # ESC or 'q'
                 return None
