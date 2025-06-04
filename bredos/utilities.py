@@ -19,6 +19,7 @@
 import os
 import random
 import string
+import shutil
 import secrets
 import tempfile
 import subprocess
@@ -324,3 +325,110 @@ while True:
                 yield line
 
         return CommandStream(generator(), proc=self.proc)
+
+
+def cp(src_file, dst_dir, overwrite=True) -> None:
+    """
+    Copies `src_file` into `dst_dir`, creating directories if needed.
+
+    Parameters:
+    - src_file (str or Path): Path to the source file.
+    - dst_dir (str or Path): Path to the destination directory.
+    - overwrite (bool): If False, raises an error if file exists.
+
+    Raises:
+    - FileNotFoundError: If src_file does not exist.
+    - FileExistsError: If destination file exists and overwrite is False.
+    - OSError: For other I/O errors.
+    """
+    src_file = Path(src_file)
+    dst_dir = Path(dst_dir)
+
+    if not src_file.is_file():
+        raise FileNotFoundError(f"Source file does not exist: {src_file}")
+
+    try:
+        dst_dir.mkdir(parents=True, exist_ok=True)
+    except Exception as e:
+        raise OSError(f"Failed to create destination directory: {dst_dir}") from e
+
+    dst_file = dst_dir / src_file.name
+
+    if dst_file.exists() and not overwrite:
+        raise FileExistsError(f"Destination file already exists: {dst_file}")
+
+    try:
+        shutil.copy2(src_file, dst_file)
+    except Exception as e:
+        raise OSError(f"Failed to copy file: {src_file} → {dst_file}") from e
+
+
+def ls(path: str) -> list:
+    """
+    Lists entries in a directory, returning full Paths.
+
+    Raises:
+    - NotADirectoryError if the path is not a directory.
+    - FileNotFoundError if the path does not exist.
+    """
+    p = Path(path)
+    if not p.exists():
+        raise FileNotFoundError(f"Directory does not exist: {path}")
+    if not p.is_dir():
+        raise NotADirectoryError(f"Path is not a directory: {path}")
+
+    return [entry.resolve() for entry in p.iterdir()]
+
+
+def rm(file_path: str, missing_ok: str = False):
+    """
+    Removes a single file.
+
+    Parameters:
+    - missing_ok (bool): if True, ignore if file does not exist.
+
+    Raises:
+    - FileNotFoundError if the file doesn't exist (unless missing_ok=True).
+    - IsADirectoryError if it's actually a directory.
+    - OSError for other I/O errors.
+    """
+
+    f = Path(file_path)
+    if not f.exists():
+        if missing_ok:
+            return
+        raise FileNotFoundError(f"File not found: {file_path}")
+    if f.is_dir():
+        raise IsADirectoryError(f"Expected file but got directory: {file_path}")
+
+    try:
+        f.unlink()
+    except Exception as e:
+        raise OSError(f"Failed to remove file: {file_path}") from e
+
+
+def rmr(dir_path: str, missing_ok: bool = False):
+    """
+    Removes a directory and all contents recursively.
+
+    Parameters:
+    - missing_ok (bool): if True, ignore if directory doesn't exist.
+
+    Raises:
+    - NotADirectoryError if path exists but is not a directory.
+    - FileNotFoundError if path is missing (unless missing_ok=True).
+    - OSError for other errors.
+    """
+
+    d = Path(dir_path)
+    if not d.exists():
+        if missing_ok:
+            return
+        raise FileNotFoundError(f"Directory not found: {dir_path}")
+    if not d.is_dir():
+        raise NotADirectoryError(f"Expected directory but got file: {dir_path}")
+
+    try:
+        shutil.rmtree(d)
+    except Exception as e:
+        raise OSError(f"Failed to remove directory: {dir_path}") from e
