@@ -283,6 +283,7 @@ def identify_base_dtb() -> tuple | None:
         return None, "No exact match found (overlays likely applied)"
 
 
+# FIXME: Use /proc/mounts instead
 def detect_efidir() -> str | None:
     try:
         df_output = subprocess.check_output(["df"], text=True)
