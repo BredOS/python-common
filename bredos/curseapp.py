@@ -1,5 +1,6 @@
 import time
 import curses
+import textwrap
 
 stdscr = None
 DRYRUN = False
@@ -15,6 +16,11 @@ def message(text: list, label: str = APP_NAME, prompt: bool = True) -> None:
     text = [subline for line in text for subline in line.split("\n")]
     maxy, maxx = stdscr.getmaxyx()
     content_height = maxy - 5  # borders + label + prompt
+    text = [
+        wrapped
+        for subline in text
+        for wrapped in (textwrap.wrap(subline, maxx) or [""])
+    ]
     scroll = 0
 
     while True:
@@ -303,6 +309,7 @@ def suspend() -> None:
 
 
 def resume() -> None:
+    global stdscr
     stdscr = curses.initscr()
     curses.noecho()
     curses.cbreak()

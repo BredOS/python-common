@@ -327,12 +327,17 @@ def identify_overlays() -> list:
                     res.append(dtbof)
         except:
             pass
-    elif extlinux_exists():
-        extcfg = dt.parse_extlinux_conf(
-            Path("/boot/extlinux/extlinux.conf").read_text()
-        )
-        if "fdtoverlays" in extlinux:
-            res += extcfg["fdtoverlays"]
+    else:
+        ubootcfg = parse_uboot()
+        if ubootcfg["U_BOOT_IS_SETUP"]:
+            if "U_BOOT_FDT_OVERLAYS" in ubootcfg:
+                res += ubootcfg["U_BOOT_FDT_OVERLAYS"].split(" ")
+        elif extlinux_exists():
+            extcfg = dt.parse_extlinux_conf(
+                Path("/boot/extlinux/extlinux.conf").read_text()
+            )
+            if "fdtoverlays" in extlinux:
+                res += extcfg["fdtoverlays"].split(" ")
     return res
 
 
