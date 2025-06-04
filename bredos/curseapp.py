@@ -307,3 +307,20 @@ def resume() -> None:
     curses.noecho()
     curses.cbreak()
     stdscr.keypad(True)
+
+
+def elevated_file_write(filepath: str, content: str) -> None:
+    escaped_lines = [
+        '"'
+        + line.replace("\\", "\\\\")
+        .replace('"', '\\"')
+        .replace("$", "\\$")
+        .replace("`", "\\`")
+        + '"'
+        for line in content.splitlines()
+    ]
+
+    printf_part = 'printf "%s\\n" ' + " ".join(escaped_lines)
+    full_cmd = f'{printf_part} | tee "{filepath}" > /dev/null'
+
+    runner(["sh", "-c", full_cmd], True, f"Writing {filepath}", False)
