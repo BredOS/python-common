@@ -291,3 +291,19 @@ def draw_menu(title: str, options: list):
         except KeyboardInterrupt:
             wait_clear()
             stdscr.clear()
+
+
+def suspend() -> None:
+    stdscr.clear()
+    stdscr.refresh()
+    curses.nocbreak()
+    stdscr.keypad(False)
+    curses.echo()
+    curses.endwin()
+
+
+def resume() -> None:
+    stdscr = curses.initscr()
+    curses.noecho()
+    curses.cbreak()
+    stdscr.keypad(True)
