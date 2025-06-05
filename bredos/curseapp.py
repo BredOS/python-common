@@ -28,7 +28,12 @@ def message(text: list, label: str = APP_NAME, prompt: bool = True) -> None:
             while True:
                 stdscr.clear()
                 draw_border()
-                stdscr.addstr(1, 2, label, curses.A_BOLD | curses.A_UNDERLINE)
+                stdscr.addstr(
+                    1,
+                    2,
+                    label + (" (DRYRUN)" if DRYRUN else ""),
+                    curses.A_BOLD | curses.A_UNDERLINE,
+                )
 
                 visible_lines = text[scroll : scroll + content_height]
                 for i, line in enumerate(visible_lines):
@@ -94,7 +99,12 @@ def confirm(text: list, label: str = APP_NAME) -> None:
             while True:
                 stdscr.clear()
                 draw_border()
-                stdscr.addstr(1, 2, label, curses.A_BOLD | curses.A_UNDERLINE)
+                stdscr.addstr(
+                    1,
+                    2,
+                    label + (" (DRYRUN)" if DRYRUN else ""),
+                    curses.A_BOLD | curses.A_UNDERLINE,
+                )
 
                 visible_lines = text[scroll : scroll + content_height]
                 for i, line in enumerate(visible_lines):
@@ -185,7 +195,12 @@ def selector(
                 stdscr.clear()
                 h, w = stdscr.getmaxyx()
                 if label:
-                    stdscr.addstr(1, 2, label, curses.A_BOLD | curses.A_UNDERLINE)
+                    stdscr.addstr(
+                        1,
+                        2,
+                        label + (" (DRYRUN)" if DRYRUN else ""),
+                        curses.A_BOLD | curses.A_UNDERLINE,
+                    )
                 stdscr.addstr(h - 2, 2, "<SPACE>", curses.A_BOLD | curses.A_REVERSE)
                 stdscr.addstr(h - 2, 10, "Select", curses.A_BOLD)
                 stdscr.addstr(h - 2, 18, "<ENTER>", curses.A_BOLD | curses.A_REVERSE)
