@@ -110,7 +110,10 @@ def confirm(text: list, label: str = APP_NAME) -> None:
         stdscr.attroff(curses.A_REVERSE)
 
         stdscr.refresh()
-        key = stdscr.getch()
+        try:
+            key = stdscr.getch()
+        except KeyboardInterrupt:
+            pass
 
         if key == ord("\n"):
             if sel is not None and scroll + content_height >= len(text):
@@ -314,20 +317,3 @@ def resume() -> None:
     curses.noecho()
     curses.cbreak()
     stdscr.keypad(True)
-
-
-def elevated_file_write(filepath: str, content: str) -> None:
-    escaped_lines = [
-        '"'
-        + line.replace("\\", "\\\\")
-        .replace('"', '\\"')
-        .replace("$", "\\$")
-        .replace("`", "\\`")
-        + '"'
-        for line in content.splitlines()
-    ]
-
-    printf_part = 'printf "%s\\n" ' + " ".join(escaped_lines)
-    full_cmd = f'{printf_part} | tee "{filepath}" > /dev/null'
-
-    runner(["sh", "-c", full_cmd], True, f"Writing {filepath}", False)
