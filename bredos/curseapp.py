@@ -178,7 +178,7 @@ def selector(
                     selected[i] = True
             start_y = 3
             h, w = stdscr.getmaxyx()
-            view_h = h - start_y - 1
+            view_h = h - start_y - 3
             offset = max(idx - view_h + 1, 0)
 
             def draw() -> None:
@@ -186,6 +186,12 @@ def selector(
                 h, w = stdscr.getmaxyx()
                 if label:
                     stdscr.addstr(1, 2, label, curses.A_BOLD | curses.A_UNDERLINE)
+                stdscr.addstr(h - 2, 2, "<SPACE>", curses.A_BOLD | curses.A_REVERSE)
+                stdscr.addstr(h - 2, 10, "Select", curses.A_BOLD)
+                stdscr.addstr(h - 2, 18, "<ENTER>", curses.A_BOLD | curses.A_REVERSE)
+                stdscr.addstr(h - 2, 26, "Confirm", curses.A_BOLD)
+                stdscr.addstr(h - 2, 35, "<Q>", curses.A_BOLD | curses.A_REVERSE)
+                stdscr.addstr(h - 2, 39, "Exit", curses.A_BOLD)
                 draw_border()
                 nonlocal offset
                 if idx < offset:
