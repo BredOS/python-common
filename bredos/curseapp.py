@@ -5,6 +5,7 @@ import textwrap
 stdscr = None
 DRYRUN = False
 APP_NAME = "BredOS"
+enabled = False
 
 
 def message(text: list, label: str = APP_NAME, prompt: bool = True) -> None:
@@ -174,11 +175,13 @@ def selector(
     label: str | None = None,
     preselect: int | list = -1,
 ) -> list | int:
+    search_query = ""
     while True:
         try:
             curses.curs_set(0)
             selected = [False] * len(items)
             idx = 0
+            offset = 0
             if isinstance(preselect, int):
                 if preselect != -1:
                     selected[preselect] = True
@@ -189,9 +192,8 @@ def selector(
             start_y = 3
             h, w = stdscr.getmaxyx()
             view_h = h - start_y - 3
-            offset = max(idx - view_h + 1, 0)
 
-            def draw() -> None:
+            def draw() -> list[tuple[int, str]]:
                 stdscr.clear()
                 h, w = stdscr.getmaxyx()
                 if label:
@@ -207,49 +209,163 @@ def selector(
                 stdscr.addstr(h - 2, 26, "Confirm", curses.A_BOLD)
                 stdscr.addstr(h - 2, 35, "<Q>", curses.A_BOLD | curses.A_REVERSE)
                 stdscr.addstr(h - 2, 39, "Exit", curses.A_BOLD)
+                stdscr.addstr(h - 2, 46, "</>", curses.A_BOLD | curses.A_REVERSE)
+                stdscr.addstr(h - 2, 51, "Search", curses.A_BOLD)
                 draw_border()
-                nonlocal offset
+
+                filtered = [
+                    (i, item)
+                    for i, item in enumerate(items)
+                    if search_query.lower() in item.lower()
+                ]
+
+                nonlocal offset, idx
+                if idx >= len(filtered):
+                    idx = max(0, len(filtered) - 1)
                 if idx < offset:
                     offset = idx
                 elif idx >= offset + view_h:
                     offset = idx - view_h + 1
+
                 for view_idx in range(view_h):
-                    item_idx = offset + view_idx
-                    y = start_y + view_idx
-                    if item_idx >= len(items):
+                    view_idx_global = offset + view_idx
+                    if view_idx_global >= len(filtered):
                         break
+                    item_idx, item_str = filtered[view_idx_global]
+                    y = start_y + view_idx
                     prefix = (
                         "- [x]"
                         if multi and selected[item_idx]
-                        else "- [ ]" if multi else " <*>" if idx == item_idx else " < >"
+                        else (
+                            "- [ ]"
+                            if multi
+                            else " <*>" if item_idx == filtered[idx][0] else " < >"
+                        )
                     )
-                    text = f"{prefix} {items[item_idx]}"
-                    attr = curses.A_REVERSE if item_idx == idx else curses.A_NORMAL
+                    text = f"{prefix} {item_str}"
+                    attr = (
+                        curses.A_REVERSE
+                        if item_idx == filtered[idx][0]
+                        else curses.A_NORMAL
+                    )
                     stdscr.addnstr(y, 2, text, w - 4, attr)
                 stdscr.refresh()
+                return filtered
 
             while True:
-                draw()
+                filtered = draw()
+                if not filtered:
+                    idx = 0
                 key = stdscr.getch()
-                if key == curses.KEY_UP:
-                    idx = (idx - 1) % len(items)
+
+                if key == ord("/"):
+                    q = text_input("Search:", prefill=search_query, label=label)
+                    if q is None:
+                        search_query = ""
+                    else:
+                        search_query = q
+                    idx = 0
+                    offset = 0
+
+                elif key == curses.KEY_UP:
+                    idx = (idx - 1) % len(filtered) if filtered else 0
                 elif key == curses.KEY_DOWN:
-                    idx = (idx + 1) % len(items)
-                elif key == ord(" ") and multi:
-                    selected[idx] = not selected[idx]
+                    idx = (idx + 1) % len(filtered) if filtered else 0
+                elif key == ord(" ") and multi and filtered:
+                    selected[filtered[idx][0]] = not selected[filtered[idx][0]]
                 elif key == ord("q"):
                     return [] if multi else None
                 elif key in (curses.KEY_ENTER, ord("\n"), ord("\r")):
                     if multi:
                         return [i for i, sel in enumerate(selected) if sel]
                     else:
-                        return idx
+                        return filtered[idx][0] if filtered else None
                 elif key == 27:  # ESC
                     return [] if multi else None
         except KeyboardInterrupt:
             pass
         except:
             pass
+
+
+def text_input(
+    prompt: str = "Input:",
+    label: str | None = None,
+    prefill: str = "",
+    mask: bool = False,
+    constraint=None,
+) -> str | None:
+    if stdscr is None:
+        try:
+            return input()
+        except KeyboardInterrupt:
+            return
+        except EOFError:
+            return
+    wait_clear()
+    while True:
+        try:
+            buf = list(prefill)
+            cursor = len(buf)
+            start_y = 3
+            h, w = stdscr.getmaxyx()
+
+            def draw() -> None:
+                stdscr.clear()
+                if label:
+                    stdscr.addstr(
+                        1,
+                        2,
+                        label + (" (DRYRUN)" if DRYRUN else ""),
+                        curses.A_BOLD | curses.A_UNDERLINE,
+                    )
+                stdscr.addstr(h - 2, 2, "<ENTER>", curses.A_BOLD | curses.A_REVERSE)
+                stdscr.addstr(h - 2, 10, "Confirm", curses.A_BOLD)
+                stdscr.addstr(h - 2, 20, "<ESC>", curses.A_BOLD | curses.A_REVERSE)
+                stdscr.addstr(h - 2, 27, "Cancel", curses.A_BOLD)
+                draw_border()
+                stdscr.addstr(start_y, 2, prompt, curses.A_BOLD)
+
+                display = "*" * len(buf) if mask else "".join(buf)
+                line = display.ljust(w - 8)
+                stdscr.addstr(start_y + 1, 4, line, curses.A_REVERSE)
+
+                stdscr.move(start_y + 1, 4 + cursor)
+                stdscr.refresh()
+
+            while True:
+                draw()
+                curses.curs_set(1)
+                key = stdscr.getch()
+                curses.curs_set(0)
+                if key in (curses.KEY_ENTER, ord("\n"), ord("\r")):
+                    final = "".join(buf)
+                    if constraint and not constraint(final):
+                        continue
+                    return final
+                elif key == 27:  # ESC
+                    curses.curs_set(0)
+                    return
+                elif key in (curses.KEY_BACKSPACE, 127, 8):
+                    if cursor > 0:
+                        cursor -= 1
+                        del buf[cursor]
+                elif key == curses.KEY_DC:
+                    if cursor < len(buf):
+                        del buf[cursor]
+                elif key == curses.KEY_LEFT:
+                    cursor = max(0, cursor - 1)
+                elif key == curses.KEY_RIGHT:
+                    cursor = min(len(buf), cursor + 1)
+                elif 32 <= key <= 126:
+                    if len(buf) < w - 9:
+                        buf.insert(cursor, chr(key))
+                        cursor += 1
+        except KeyboardInterrupt:
+            pass
+        except:
+            pass
+        curses.curs_set(0)
 
 
 def draw_border() -> None:
@@ -355,6 +471,10 @@ def draw_menu(title: str, options: list):
 
 
 def suspend() -> None:
+    global enabled
+    if not enabled:
+        return
+    enabled = False
     stdscr.clear()
     stdscr.refresh()
     curses.nocbreak()
@@ -364,8 +484,29 @@ def suspend() -> None:
 
 
 def resume() -> None:
-    global stdscr
+    global stdscr, enabled
+    if enabled:
+        return
     stdscr = curses.initscr()
     curses.noecho()
     curses.cbreak()
     stdscr.keypad(True)
+    enabled = True
+
+
+def init() -> None:
+    global stdscr, enabled
+    if enabled:
+        return
+    resume()
+    curses.start_color()
+    curses.use_default_colors()
+    try:
+        curses.init_pair(1, 166, -1)
+    except:
+        try:
+            curses.init_pair(1, curses.COLOR_RED, -1)
+        except:
+            pass
+    stdscr.bkgd(" ", curses.color_pair(1))
+    stdscr.clear()
