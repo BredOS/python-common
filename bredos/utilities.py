@@ -426,3 +426,18 @@ def rmr(dir_path: str, missing_ok: bool = False):
         shutil.rmtree(d)
     except Exception as e:
         raise OSError(f"Failed to remove directory: {dir_path}") from e
+
+
+def arm64_v9_or_later() -> bool:
+    try:
+        with open("/proc/cpuinfo") as f:
+            lines = f.readlines()
+    except OSError:
+        return False
+
+    for line in lines:
+        if line.lower().startswith("features"):
+            features = line.split(":", 1)[1].lower()
+            # ARMv9 mandates FEAT_SVE (Scalable Vector Extension)
+            return "sve2" in features
+    return False

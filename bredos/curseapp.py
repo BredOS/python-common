@@ -3,6 +3,7 @@ import curses
 import textwrap
 
 stdscr = None
+NOCONFIRM = False
 DRYRUN = False
 APP_NAME = "BredOS"
 enabled = False
@@ -72,7 +73,10 @@ def message(text: list, label: str = APP_NAME, prompt: bool = True) -> None:
             pass
 
 
-def confirm(text: list, label: str = APP_NAME) -> None:
+def confirm(text: list, label: str = APP_NAME) -> bool:
+    global NOCONFIRM
+    if NOCONFIRM:
+        return True
     while True:
         try:
             if stdscr is None:
