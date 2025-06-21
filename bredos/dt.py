@@ -3,12 +3,21 @@ import re
 import shlex
 import hashlib
 import subprocess
+from glob import glob
 from pathlib import Path
 from concurrent.futures import ThreadPoolExecutor, as_completed
 
 dts_cache = {}
-DTB_PATH = Path("/boot/dtbs")
+DTB_PATH = None
 PROC_DT = Path("/proc/device-tree")
+
+candidates = ["/usr/lib/modules/*/dtbs", "/usr/lib/modules/*/dtb", "/boot/dtbs"]
+
+for pattern in candidates:
+    matches = sorted(glob(pattern))
+    for path in matches:
+        if os.path.isdir(path):
+            DTB_PATH = Path(path)
 
 
 def force_quote(val: int | str) -> str:
@@ -189,10 +198,8 @@ def serialize_extlinux_conf(config: dict) -> str:
 def gencache() -> dict:
     res = {"base": {}, "overlays": {}}
     try:
-        dtb_root = Path("/boot/dtbs")
-
-        base_files = list(dtb_root.rglob("*.dtb"))
-        overlay_files = list(dtb_root.rglob("*.dtbo"))
+        base_files = list(DTB_PATH.rglob("*.dtb"))
+        overlay_files = list(DTB_PATH.rglob("*.dtbo"))
 
         with ThreadPoolExecutor() as executor:
             future_to_path_base = {
