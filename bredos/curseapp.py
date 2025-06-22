@@ -42,7 +42,7 @@ def detect_pos(timeout=1.0):
         pass
     finally:
         termios.tcsetattr(fd, termios.TCSADRAIN, old_settings)
-    return None
+    return [0, 0]
 
 
 def detect_size(timeout=0.3):
@@ -88,7 +88,7 @@ def detect_size(timeout=0.3):
         pass
     finally:
         termios.tcsetattr(fd, termios.TCSADRAIN, old_settings)
-    return None
+    return [24, 80]
 
 
 def message(text: list, label: str = APP_NAME, prompt: bool = True) -> None:
