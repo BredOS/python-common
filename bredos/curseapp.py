@@ -1,12 +1,94 @@
-import time
-import curses
-import textwrap
+import time, curses, textwrap, sys
+import termios, tty, os
 
 stdscr = None
 NOCONFIRM = False
 DRYRUN = False
 APP_NAME = "BredOS"
 enabled = False
+
+
+def detect_pos(timeout=1.0):
+    """
+    Detect cursor position. Returns [row, col] or None if failed.
+    Works in interactive POSIX terminals.
+
+    BeOS CircuitPython code ported for desktop Python.
+    Will work even in hell.
+    """
+    fd = sys.stdin.fileno()
+    old_settings = termios.tcgetattr(fd)
+    try:
+        tty.setcbreak(fd)
+        sys.stdout.write("\x1b[6n")
+        sys.stdout.flush()
+
+        buf = ""
+        start = time.monotonic()
+        while time.monotonic() - start < timeout:
+            if os.read(fd, 1) == b"\x1b":
+                if os.read(fd, 1) == b"[":
+                    while True:
+                        ch = os.read(fd, 1).decode()
+                        buf += ch
+                        if ch == "R":
+                            break
+                    break
+        if buf:
+            buf = buf.rstrip("R")
+            rows, cols = map(int, buf.split(";"))
+            return [rows, cols]
+    except Exception:
+        pass
+    finally:
+        termios.tcsetattr(fd, termios.TCSADRAIN, old_settings)
+    return None
+
+
+def detect_size(timeout=0.3):
+    """
+    Detect terminal size by moving cursor to bottom-right and querying position.
+    Returns [rows, cols] or None if failed.
+
+    BeOS CircuitPython code ported for desktop Python.
+    Will work even in hell.
+    """
+    fd = sys.stdin.fileno()
+    old_settings = termios.tcgetattr(fd)
+    try:
+        tty.setcbreak(fd)
+        # Save position
+        sys.stdout.write("\x1b[s")
+        # Move cursor to huge position
+        sys.stdout.write("\x1b[999;999H")
+        # Request position
+        sys.stdout.write("\x1b[6n")
+        sys.stdout.flush()
+
+        buf = ""
+        start = time.monotonic()
+        while time.monotonic() - start < timeout:
+            if os.read(fd, 1) == b"\x1b":
+                if os.read(fd, 1) == b"[":
+                    while True:
+                        ch = os.read(fd, 1).decode()
+                        buf += ch
+                        if ch == "R":
+                            break
+                    break
+        # Restore cursor
+        sys.stdout.write("\x1b[u")
+        sys.stdout.flush()
+
+        if buf:
+            buf = buf.rstrip("R")
+            rows, cols = map(int, buf.split(";"))
+            return [rows, cols]
+    except Exception:
+        pass
+    finally:
+        termios.tcsetattr(fd, termios.TCSADRAIN, old_settings)
+    return None
 
 
 def message(text: list, label: str = APP_NAME, prompt: bool = True) -> None:
@@ -18,7 +100,7 @@ def message(text: list, label: str = APP_NAME, prompt: bool = True) -> None:
     while True:
         try:
             text = [subline for line in text for subline in line.split("\n")]
-            maxy, maxx = stdscr.getmaxyx()
+            maxy, maxx = detect_size()
             content_height = maxy - 5  # borders + label + prompt
             text = [
                 wrapped
@@ -96,7 +178,7 @@ def confirm(text: list, label: str = APP_NAME) -> bool:
                 return False  # Magical fallthrough
 
             text = [subline for line in text for subline in line.split("\n")]
-            maxy, maxx = stdscr.getmaxyx()
+            maxy, maxx = detect_size()
             content_height = maxy - 5  # space for borders, label, and prompt
             scroll = 0
             sel = None
@@ -194,12 +276,12 @@ def selector(
                 for i in preselect:
                     selected[i] = True
             start_y = 3
-            h, w = stdscr.getmaxyx()
+            h, w = detect_size()
             view_h = h - start_y - 3
 
             def draw() -> list[tuple[int, str]]:
                 stdscr.clear()
-                h, w = stdscr.getmaxyx()
+                h, w = detect_size()
                 if label:
                     stdscr.addstr(
                         1,
@@ -312,7 +394,7 @@ def text_input(
             buf = list(prefill)
             cursor = len(buf)
             start_y = 3
-            h, w = stdscr.getmaxyx()
+            h, w = detect_size()
 
             def draw() -> None:
                 stdscr.clear()
@@ -408,7 +490,7 @@ def clear_line(y) -> None:
 def draw_list(title: str, options: list, selected: int, special: bool = False) -> None:
     stdscr.addstr(1, 2, title, curses.A_BOLD | curses.A_UNDERLINE)
 
-    h, w = stdscr.getmaxyx()
+    h, w = detect_size()
     for idx, option in enumerate(options):
         x = 4
         y = 3 + idx
@@ -504,7 +586,22 @@ def init() -> None:
         return
     resume()
     curses.start_color()
-    curses.use_default_colors()
+    try:
+        curses.use_default_colors()
+        max_colors = curses.COLORS
+    except curses.error:
+        # Fallback: terminal doesn't support default colors
+        max_colors = 16
+
+    max_colors = max(max_colors, 16)
+
+    for i in range(min(max_colors, 16)):
+        # Foreground i, background default (-1)
+        try:
+            curses.init_pair(i + 1, i, -1)
+        except curses.error:
+            # Ignore errors if fewer colors supported
+            pass
     try:
         curses.init_pair(1, 166, -1)
     except:
