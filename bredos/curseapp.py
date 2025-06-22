@@ -593,9 +593,9 @@ def init() -> None:
         # Fallback: terminal doesn't support default colors
         max_colors = 16
 
-    max_colors = max(max_colors, 16)
+    max_colors = max(max_colors, 7)
 
-    for i in range(min(max_colors, 16)):
+    for i in range(min(max_colors, 7)):
         # Foreground i, background default (-1)
         try:
             curses.init_pair(i + 1, i, -1)
