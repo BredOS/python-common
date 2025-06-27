@@ -5,13 +5,15 @@ import hashlib
 import subprocess
 from glob import glob
 from pathlib import Path
-from concurrent.futures import ThreadPoolExecutor, as_completed
+from concurrent.futures import ProcessPoolExecutor, as_completed
 
-dts_cache = {}
+
+dtcache = {}
 DTB_PATH = None
 PROC_DT = Path("/proc/device-tree")
 
 candidates = ["/usr/lib/modules/*/dtbs", "/usr/lib/modules/*/dtb", "/boot/dtbs"]
+
 
 for pattern in candidates:
     matches = sorted(glob(pattern))
@@ -195,35 +197,52 @@ def serialize_extlinux_conf(config: dict) -> str:
     return "\n".join(lines).rstrip()
 
 
+def _extract_info_wrapper(path_str: str, kind: str) -> tuple[str, str, dict] | None:
+    path = Path(path_str)
+    result = extract_dtb_info(path)
+    if result:
+        return (path_str, kind, result)
+    return None
+
+
 def gencache() -> dict:
+    global dtcache
     res = {"base": {}, "overlays": {}}
+
     try:
         base_files = list(DTB_PATH.rglob("*.dtb"))
         overlay_files = list(DTB_PATH.rglob("*.dtbo"))
 
-        with ThreadPoolExecutor() as executor:
-            future_to_path_base = {
-                executor.submit(extract_dtb_info, path): path for path in base_files
-            }
-            future_to_path_overlay = {
-                executor.submit(extract_dtb_info, path): path for path in overlay_files
+        all_files = [(str(path), "base") for path in base_files] + [
+            (str(path), "overlays") for path in overlay_files
+        ]
+
+        with ProcessPoolExecutor(max_workers=os.cpu_count()) as executor:
+            futures = {
+                executor.submit(_extract_info_wrapper, path, kind): (path, kind)
+                for path, kind in all_files
+                if path not in dtcache  # skip already cached paths
             }
 
-            for future in as_completed(future_to_path_base):
-                path = future_to_path_base[future]
+            for future in as_completed(futures):
                 result = future.result()
                 if result:
-                    res["base"][str(path)] = result
+                    path_str, kind, data = result
+                    dtcache[path_str] = data
+                    res[kind][path_str] = data
 
-            for future in as_completed(future_to_path_overlay):
-                path = future_to_path_overlay[future]
-                result = future.result()
-                if result:
-                    res["overlays"][str(path)] = result
+        # Also fill `res` from preexisting dtcache
+        for path_str, data in dtcache.items():
+            if path_str.endswith(".dtb"):
+                res["base"][path_str] = data
+            elif path_str.endswith(".dtbo"):
+                res["overlays"][path_str] = data
+
     except KeyboardInterrupt:
         pass
-    except:
+    except Exception:
         pass
+
     return res
 
 
@@ -241,7 +260,7 @@ def detect_live() -> tuple:
     overlay_diff = []
     min_diff = float("inf")
 
-    with ThreadPoolExecutor() as executor:
+    with ProcessPoolExecutor() as executor:
         futures = {
             executor.submit(dt_process_candidate, dtb, live_hash): dtb
             for dtb in candidates
@@ -405,41 +424,186 @@ def booted_with_edk() -> bool:
         return False
 
 
+def dtb_to_yaml(dtb_path: Path) -> dict | None:
+    dts = dtb_to_dts(dtb_path)
+    if not dts:
+        return None
+
+    try:
+        yaml_raw = subprocess.check_output(
+            ["dtc", "-I", "dts", "-O", "yaml", "-q", "-"],
+            input=dts.encode(),
+            stderr=subprocess.DEVNULL,
+        ).decode()
+
+        parsed = parse_dtc_yaml(yaml_raw)
+        return parsed
+    except subprocess.CalledProcessError:
+        return None
+
+
+def _no_brackets(key: str) -> str:
+    return (
+        key[1:-1]
+        if (key.startswith('"') and key.endswith('"'))
+        or (key.startswith("'") and key.endswith("'"))
+        else key
+    )
+
+
+def _flatten(obj):
+    """
+    Recursively collapse any [ [ ... ] ] -> [ ... ] single-element lists of lists.
+    """
+    if isinstance(obj, dict):
+        return {k: _flatten(v) for k, v in obj.items()}
+    if isinstance(obj, list):
+        lst = [_flatten(v) for v in obj]
+        # if it's a single-element list whose only element is itself a list, unwrap:
+        if len(lst) == 1 and isinstance(lst[0], list):
+            return lst[0]
+        return lst
+    return obj
+
+
+def parse_dtc_yaml(data: str) -> dict:
+    root: dict = {}
+    stack = [root]
+    indents = [0]
+    last_keys = [None]  # track last key in each dict for list appends
+
+    for line in data.splitlines():
+        raw = line.rstrip().rstrip(";")  # strip trailing semicolon
+        stripped = raw.lstrip()
+        if not stripped or stripped in ("---", "...") or stripped.startswith("#"):
+            continue
+
+        indent = len(line) - len(stripped)
+
+        # pop back up when dedenting
+        while indent < indents[-1]:
+            stack.pop()
+            indents.pop()
+            last_keys.pop()
+
+        container = stack[-1]
+
+        # list entry?
+        if stripped.startswith("- "):
+            entry = stripped[2:].strip()
+            # split "key: val" in a flow list?
+            if ":" in entry and not entry.startswith('"'):
+                # e.g. - compatible: [...]
+                key, val = entry.split(":", 1)
+                key = key.strip().strip('"')
+                val = _parse_scalar(val.strip())
+                container.setdefault(key, []).append(val)
+            else:
+                # plain list item under last_keys[-1]
+                lk = last_keys[-1]
+                if lk is None:
+                    continue
+                val = _parse_scalar(entry)
+                lst = container.setdefault(lk, [])
+                if not isinstance(lst, list):
+                    container[lk] = lst = [lst]
+                lst.append(val)
+            continue
+
+        # key: value or key:
+        if ":" in stripped:
+            key, rest = stripped.split(":", 1)
+            key = key.strip().strip('"')
+            val_str = rest.strip()
+            if val_str == "":
+                # new nested mapping
+                new_map: dict = {}
+                container[_no_brackets(key)] = new_map
+                stack.append(new_map)
+                indents.append(indent)
+                last_keys.append(None)
+            else:
+                val = _parse_scalar(val_str)
+                container[_no_brackets(key)] = val
+                last_keys[-1] = key
+
+    return _flatten(root)
+
+
+def _parse_scalar(val: str):
+    val = val.strip()
+
+    # remove surrounding quotes
+    if val.startswith('"') and val.endswith('"'):
+        return val[1:-1]
+
+    # boolean
+    if val.lower() in ("true", "false"):
+        return val.lower() == "true"
+
+    # flow list (possibly broken or multiline)
+    if val.startswith("["):
+        inner = val[1:]
+        if inner.endswith("]"):
+            inner = inner[:-1]
+
+        # remove trailing commas or semicolons from inner list
+        inner = inner.strip().rstrip(",;")
+
+        if not inner:
+            return []
+
+        # Regex match quoted or unquoted tokens (handles broken dtc lists too)
+        items = []
+        for m in re.finditer(r'"([^"]*)"|([^,\s\]]+)', inner):
+            token = m.group(1) if m.group(1) is not None else m.group(2)
+            token = token.strip().rstrip(",")
+            items.append(_parse_scalar(token))
+        return items
+
+    # numeric
+    try:
+        if "." in val:
+            return float(val)
+        return int(val, 0)
+    except ValueError:
+        return val
+
+
 def extract_dtb_info(dtb_path: Path) -> dict | None:
-    output = dtb_to_dts(dtb_path)
+    global dtcache
 
-    description = None
-    compatible = []
+    path_str = str(dtb_path)
+    if path_str in dtcache:
+        return dtcache[path_str]
 
-    for line in output.splitlines():
-        line = line.strip()
-        if line.startswith("description =") and description is not None:
-            description = line.split("=", 1)[1].strip().strip('"').strip(";")
-        elif line.startswith("compatible =") and not compatible:
-            compat_str = line.split("=", 1)[1].strip().strip(";")
-            compatible = [compat_str.strip().strip('"')]
+    tree = dtb_to_yaml(dtb_path)
+    if not tree:
+        return None
 
-    name = str(dtb_path)
-    name = name[name.rfind("/") + 1 : name.rfind(".")]
+    name = dtb_path.stem
+    description = tree.get("model", "")
+    if isinstance(description, list):
+        description = " ".join(description)
+    compatible = tree.get("compatible", [])
 
-    return {
+    res = {
         "name": name,
         "description": description,
         "compatible": compatible,
     }
 
+    dtcache[path_str] = res
+    return res
+
 
 def dtb_to_dts(dtb_path) -> str | None:
-    global dts_cache
-    if dtb_path in dts_cache:
-        return dts_cache[dtb_path]
     try:
         res = subprocess.check_output(
             ["dtc", "-I", "dtb", "-O", "dts", "-q", str(dtb_path)],
             stderr=subprocess.DEVNULL,
         ).decode()
 
-        dts_cache[dtb_path] = res
         return res
     except subprocess.CalledProcessError:
         return None

@@ -1,7 +1,7 @@
 #Maintainer: Panda <panda@bredos.org>
 
 pkgname=python-bredos-common
-pkgver=1.3.3
+pkgver=1.4.0
 pkgrel=1
 depends=('python>=3.12' 'python-pyrunning' 'python-pysetting' 'pyalpm')
 url="https://github.com/BredOS/python-common"
