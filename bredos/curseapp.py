@@ -91,6 +91,17 @@ def detect_size(timeout=0.3):
     return [24, 80]
 
 
+def lw(text: list, width: int = None) -> list:
+    if width is None:
+        width, _ = detect_size()
+
+    return [
+        wrapped
+        for subline in text
+        for wrapped in (textwrap.wrap(subline, width) or [""])
+    ]
+
+
 def message(text: list, label: str = APP_NAME, prompt: bool = True) -> None:
     if stdscr is None:
         for line in text:
@@ -102,11 +113,7 @@ def message(text: list, label: str = APP_NAME, prompt: bool = True) -> None:
             text = [subline for line in text for subline in line.split("\n")]
             maxy, maxx = detect_size()
             content_height = maxy - 5  # borders + label + prompt
-            text = [
-                wrapped
-                for subline in text
-                for wrapped in (textwrap.wrap(subline, maxx) or [""])
-            ]
+            text = lw(text, maxx)
             scroll = 0
 
             while True:
@@ -277,6 +284,12 @@ def selector(
                     selected[i] = True
             start_y = 3
             h, w = detect_size()
+
+            while h < 5 or w < 60:
+                message([f"Terminal too small {h}<5||{w}<60"], "Error", prompt=False)
+                time.sleep(0.5)
+                h, w = detect_size()
+
             view_h = h - start_y - 3
 
             def draw() -> list[tuple[int, str]]:
