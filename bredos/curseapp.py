@@ -569,6 +569,23 @@ def draw_menu(title: str, options: list):
             pass
 
 
+def menu(title: str, actions: dict[str, callable]) -> None:
+    options = list(actions.keys()) + ["Main Menu"]
+
+    while True:
+        selection = c.draw_menu(title, options)
+        if selection is None or options[selection] == "Main Menu":
+            return
+
+        c.stdscr.clear()
+        c.stdscr.refresh()
+
+        action_key = options[selection]
+        func = actions.get(action_key)
+        if func:
+            func()
+
+
 def suspend() -> None:
     global enabled
     if not enabled:

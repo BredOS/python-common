@@ -43,10 +43,11 @@ class CommandStream:
         self.stderr = proc.stderr
 
     def __enter__(self):
-        return self
+        if self._proc:
+            return self
 
     def __exit__(self, exc_type, exc_val, exc_tb):
-        if hasattr(self._gen, "close"):
+        if self._proc and hasattr(self._gen, "close"):
             try:
                 self.returncode = self._proc.returncode
             except:
@@ -55,25 +56,30 @@ class CommandStream:
             self._proc = None
 
     def __iter__(self):
-        return self
+        if self._proc:
+            return self
 
     def __next__(self):
-        return next(self._iter)
+        if self._proc:
+            return next(self._iter)
 
     def read(self) -> str:
-        return "".join(self._iter)
+        if self._proc:
+            return "".join(self._iter)
 
     def readline(self) -> str:
-        try:
-            return next(self._iter)
-        except StopIteration:
-            return ""
+        if self._proc:
+            try:
+                return next(self._iter)
+            except StopIteration:
+                return ""
 
     def readlines(self) -> list[str]:
-        return list(self._iter)
+        if self._proc:
+            return list(self._iter)
 
-    def close(self):
-        if hasattr(self._gen, "close"):
+    def close(self) -> None:
+        if self._proc and hasattr(self._gen, "close"):
             try:
                 self.returncode = self._proc.returncode
             except:
@@ -81,7 +87,7 @@ class CommandStream:
             self._gen.close()
             self._proc = None
 
-    def wait(self):
+    def wait(self) -> None:
         if self._proc:
             try:
                 self.returncode = self._proc.returncode
@@ -89,9 +95,8 @@ class CommandStream:
                 pass
             self._gen.close()
             self._proc = None
-        return
 
-    def kill(self):
+    def kill(self) -> None:
         if self._proc:
             try:
                 self.returncode = self._proc.returncode
