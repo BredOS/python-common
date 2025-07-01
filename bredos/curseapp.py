@@ -569,16 +569,16 @@ def draw_menu(title: str, options: list):
             pass
 
 
-def menu(title: str, actions: dict[str, callable]) -> None:
-    options = list(actions.keys()) + ["Main Menu"]
+def menu(title: str, actions: dict[str, callable], back: str = "Go Back") -> None:
+    options = list(actions.keys()) + [back]
 
     while True:
-        selection = c.draw_menu(title, options)
-        if selection is None or options[selection] == "Main Menu":
+        selection = draw_menu(title, options)
+        if selection is None or options[selection] == back:
             return
 
-        c.stdscr.clear()
-        c.stdscr.refresh()
+        stdscr.clear()
+        stdscr.refresh()
 
         action_key = options[selection]
         func = actions.get(action_key)
