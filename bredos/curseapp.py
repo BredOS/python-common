@@ -102,7 +102,52 @@ def lw(text: list, width: int = None) -> list:
     ]
 
 
-def message(text: list, label: str = APP_NAME, prompt: bool = True) -> None:
+def _calculate_layout(maxx, sidebar):
+    """Calculate layout dimensions based on whether sidebar is present."""
+    if sidebar is None:
+        return 2, maxx - 4, 0  # content_x, content_width, sidebar_width
+
+    # Calculate sidebar width based on longest item
+    max_item_len = max(len(item) for item in sidebar.keys()) if sidebar else 0
+    sidebar_width = max(max_item_len + 8, 15)  # "- [x] " + text + padding
+
+    content_x = sidebar_width + 3  # sidebar + border + padding
+    content_width = maxx - content_x - 2  # remaining space minus border
+
+    return content_x, content_width, sidebar_width
+
+
+def _draw_sidebar(stdscr, sidebar, sidebar_width, maxx, maxy):
+    """Draw the sidebar with items and checkboxes."""
+    if sidebar is None:
+        return
+
+    # Draw vertical separator
+    for y in range(3, maxy - 1):
+        stdscr.addch(y, sidebar_width + 1, "│")
+
+    # Draw horizontal separator line under title
+    stdscr.addch(2, 0, "├")
+    stdscr.addch(2, maxx - 1, "┤")
+    stdscr.addch(y + 1, sidebar_width + 1, "┴")
+    separator_line = "─" * (maxx - 2)
+    stdscr.addstr(2, 1, separator_line)
+    stdscr.addch(2, sidebar_width + 1, "┬")
+
+    # Draw sidebar items
+    y = 3
+    for item, checked in sidebar.items():
+        if y >= maxy - 2:  # Don't draw beyond available space
+            break
+        checkbox = "- [x]" if checked else "- [ ]"
+        sidebar_text = f"{checkbox} {item}"
+        stdscr.addstr(y, 2, sidebar_text[: sidebar_width - 2])
+        y += 1
+
+
+def message(
+    text: list, label: str = APP_NAME, prompt: bool = True, sidebar: dict = None
+) -> None:
     if stdscr is None:
         for line in text:
             print(line)
@@ -112,13 +157,22 @@ def message(text: list, label: str = APP_NAME, prompt: bool = True) -> None:
         try:
             text = [subline for line in text for subline in line.split("\n")]
             maxy, maxx = detect_size()
+
+            # Calculate layout
+            content_x, content_width, sidebar_width = _calculate_layout(maxx, sidebar)
             content_height = maxy - 5  # borders + label + prompt
-            text = lw(text, maxx)
+
+            text = lw(text, content_width)
             scroll = 0
 
             while True:
                 stdscr.clear()
                 draw_border()
+
+                # Draw sidebar
+                _draw_sidebar(stdscr, sidebar, sidebar_width, maxx, maxy)
+
+                # Title always stays at original position (column 2)
                 stdscr.addstr(
                     1,
                     2,
@@ -128,7 +182,7 @@ def message(text: list, label: str = APP_NAME, prompt: bool = True) -> None:
 
                 visible_lines = text[scroll : scroll + content_height]
                 for i, line in enumerate(visible_lines):
-                    stdscr.addstr(3 + i, 2, line[: maxx - 4])
+                    stdscr.addstr(3 + i, content_x, line[:content_width])
 
                 if not prompt:
                     stdscr.refresh()
@@ -137,7 +191,7 @@ def message(text: list, label: str = APP_NAME, prompt: bool = True) -> None:
                 stdscr.attron(curses.A_REVERSE)
                 stdscr.addstr(
                     maxy - 2,
-                    2,
+                    content_x,
                     (" SCROLL DOWN --" if scroll + content_height < len(text) else "")
                     + " Press Enter to continue ",
                 )
@@ -162,7 +216,7 @@ def message(text: list, label: str = APP_NAME, prompt: bool = True) -> None:
             pass
 
 
-def confirm(text: list, label: str = APP_NAME) -> bool:
+def confirm(text: list, label: str = APP_NAME, sidebar: dict = None) -> bool:
     global NOCONFIRM
     if NOCONFIRM:
         return True
@@ -186,13 +240,22 @@ def confirm(text: list, label: str = APP_NAME) -> bool:
 
             text = [subline for line in text for subline in line.split("\n")]
             maxy, maxx = detect_size()
+
+            # Calculate layout
+            content_x, content_width, sidebar_width = _calculate_layout(maxx, sidebar)
             content_height = maxy - 5  # space for borders, label, and prompt
+
             scroll = 0
             sel = None
 
             while True:
                 stdscr.clear()
                 draw_border()
+
+                # Draw sidebar
+                _draw_sidebar(stdscr, sidebar, sidebar_width, maxx, maxy)
+
+                # Title always stays at original position (column 2)
                 stdscr.addstr(
                     1,
                     2,
@@ -202,7 +265,7 @@ def confirm(text: list, label: str = APP_NAME) -> bool:
 
                 visible_lines = text[scroll : scroll + content_height]
                 for i, line in enumerate(visible_lines):
-                    stdscr.addstr(3 + i, 2, line[: maxx - 4])
+                    stdscr.addstr(3 + i, content_x, line[:content_width])
 
                 stdscr.attron(curses.A_REVERSE)
                 if sel is True:
@@ -227,7 +290,7 @@ def confirm(text: list, label: str = APP_NAME) -> bool:
                     )
                 else:
                     prompt_line = " Confirm (Y/N): "
-                stdscr.addstr(maxy - 2, 2, prompt_line)
+                stdscr.addstr(maxy - 2, content_x, prompt_line)
                 stdscr.attroff(curses.A_REVERSE)
 
                 stdscr.refresh()
@@ -267,6 +330,7 @@ def selector(
     multi: bool,
     label: str | None = None,
     preselect: int | list = -1,
+    sidebar: dict = None,
 ) -> list | int:
     search_query = ""
     while True:
@@ -290,11 +354,19 @@ def selector(
                 time.sleep(0.5)
                 h, w = detect_size()
 
+            # Calculate layout
+            content_x, content_width, sidebar_width = _calculate_layout(w, sidebar)
             view_h = h - start_y - 3
 
             def draw() -> list[tuple[int, str]]:
                 stdscr.clear()
                 h, w = detect_size()
+                draw_border()
+
+                # Draw sidebar
+                _draw_sidebar(stdscr, sidebar, sidebar_width, w, h)
+
+                # Title always stays at original position (column 2)
                 if label:
                     stdscr.addstr(
                         1,
@@ -302,15 +374,24 @@ def selector(
                         label + (" (DRYRUN)" if DRYRUN else ""),
                         curses.A_BOLD | curses.A_UNDERLINE,
                     )
-                stdscr.addstr(h - 2, 2, "<SPACE>", curses.A_BOLD | curses.A_REVERSE)
-                stdscr.addstr(h - 2, 10, "Select", curses.A_BOLD)
-                stdscr.addstr(h - 2, 18, "<ENTER>", curses.A_BOLD | curses.A_REVERSE)
-                stdscr.addstr(h - 2, 26, "Confirm", curses.A_BOLD)
-                stdscr.addstr(h - 2, 35, "<Q>", curses.A_BOLD | curses.A_REVERSE)
-                stdscr.addstr(h - 2, 39, "Exit", curses.A_BOLD)
-                stdscr.addstr(h - 2, 46, "</>", curses.A_BOLD | curses.A_REVERSE)
-                stdscr.addstr(h - 2, 51, "Search", curses.A_BOLD)
-                draw_border()
+
+                # Bottom help text - positioned based on content area
+                stdscr.addstr(
+                    h - 2, content_x, "<SPACE>", curses.A_BOLD | curses.A_REVERSE
+                )
+                stdscr.addstr(h - 2, content_x + 8, "Select", curses.A_BOLD)
+                stdscr.addstr(
+                    h - 2, content_x + 16, "<ENTER>", curses.A_BOLD | curses.A_REVERSE
+                )
+                stdscr.addstr(h - 2, content_x + 24, "Confirm", curses.A_BOLD)
+                stdscr.addstr(
+                    h - 2, content_x + 33, "<Q>", curses.A_BOLD | curses.A_REVERSE
+                )
+                stdscr.addstr(h - 2, content_x + 37, "Exit", curses.A_BOLD)
+                stdscr.addstr(
+                    h - 2, content_x + 44, "</>", curses.A_BOLD | curses.A_REVERSE
+                )
+                stdscr.addstr(h - 2, content_x + 49, "Search", curses.A_BOLD)
 
                 filtered = [
                     (i, item)
@@ -347,7 +428,7 @@ def selector(
                         if item_idx == filtered[idx][0]
                         else curses.A_NORMAL
                     )
-                    stdscr.addnstr(y, 2, text, w - 4, attr)
+                    stdscr.addnstr(y, content_x, text, content_width, attr)
                 stdscr.refresh()
                 return filtered
 
@@ -358,7 +439,9 @@ def selector(
                 key = stdscr.getch()
 
                 if key == ord("/"):
-                    q = text_input("Search:", prefill=search_query, label=label)
+                    q = text_input(
+                        "Search:", prefill=search_query, label=label, sidebar=sidebar
+                    )
                     if q is None:
                         search_query = ""
                     else:
@@ -393,6 +476,7 @@ def text_input(
     prefill: str = "",
     mask: bool = False,
     constraint=None,
+    sidebar: dict = None,
 ) -> str | None:
     if stdscr is None:
         try:
@@ -411,6 +495,14 @@ def text_input(
 
             def draw() -> None:
                 stdscr.clear()
+
+                # Calculate layout
+                content_x, content_width, sidebar_width = _calculate_layout(w, sidebar)
+
+                # Draw sidebar
+                _draw_sidebar(stdscr, sidebar, sidebar_width, w, h)
+
+                # Title always stays at original position (column 2)
                 if label:
                     stdscr.addstr(
                         1,
@@ -418,18 +510,24 @@ def text_input(
                         label + (" (DRYRUN)" if DRYRUN else ""),
                         curses.A_BOLD | curses.A_UNDERLINE,
                     )
-                stdscr.addstr(h - 2, 2, "<ENTER>", curses.A_BOLD | curses.A_REVERSE)
-                stdscr.addstr(h - 2, 10, "Confirm", curses.A_BOLD)
-                stdscr.addstr(h - 2, 20, "<ESC>", curses.A_BOLD | curses.A_REVERSE)
-                stdscr.addstr(h - 2, 27, "Cancel", curses.A_BOLD)
+                stdscr.addstr(
+                    h - 2, content_x, "<ENTER>", curses.A_BOLD | curses.A_REVERSE
+                )
+                stdscr.addstr(h - 2, content_x + 8, "Confirm", curses.A_BOLD)
+                stdscr.addstr(
+                    h - 2, content_x + 18, "<ESC>", curses.A_BOLD | curses.A_REVERSE
+                )
+                stdscr.addstr(h - 2, content_x + 25, "Cancel", curses.A_BOLD)
                 draw_border()
-                stdscr.addstr(start_y, 2, prompt, curses.A_BOLD)
+                stdscr.addstr(start_y, content_x, prompt, curses.A_BOLD)
 
                 display = "*" * len(buf) if mask else "".join(buf)
-                line = display.ljust(w - 8)
-                stdscr.addstr(start_y + 1, 4, line, curses.A_REVERSE)
+                line = display.ljust(content_width)
+                stdscr.addstr(
+                    start_y + 1, content_x + 2, line[:content_width], curses.A_REVERSE
+                )
 
-                stdscr.move(start_y + 1, 4 + cursor)
+                stdscr.move(start_y + 1, content_x + 2 + cursor)
                 stdscr.refresh()
 
             while True:
@@ -437,6 +535,10 @@ def text_input(
                 curses.curs_set(1)
                 key = stdscr.getch()
                 curses.curs_set(0)
+
+                # Calculate current content width for input validation
+                _, content_width, _ = _calculate_layout(w, sidebar)
+
                 if key in (curses.KEY_ENTER, ord("\n"), ord("\r")):
                     final = "".join(buf)
                     if constraint and not constraint(final):
@@ -457,7 +559,7 @@ def text_input(
                 elif key == curses.KEY_RIGHT:
                     cursor = min(len(buf), cursor + 1)
                 elif 32 <= key <= 126:
-                    if len(buf) < w - 9:
+                    if len(buf) < content_width - 4:
                         buf.insert(cursor, chr(key))
                         cursor += 1
         except KeyboardInterrupt:
