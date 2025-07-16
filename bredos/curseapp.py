@@ -146,8 +146,10 @@ def _draw_sidebar(stdscr, sidebar, sidebar_width, maxx, maxy):
 
 
 def message(
-    text: list, label: str = APP_NAME, prompt: bool = True, sidebar: dict = None
+    text: list, label: str = None, prompt: bool = True, sidebar: dict = None
 ) -> None:
+    if label is None:
+        label = APP_NAME
     if stdscr is None:
         for line in text:
             print(line)
@@ -216,10 +218,12 @@ def message(
             pass
 
 
-def confirm(text: list, label: str = APP_NAME, sidebar: dict = None) -> bool:
+def confirm(text: list, label: str = None, sidebar: dict = None) -> bool:
     global NOCONFIRM
     if NOCONFIRM:
         return True
+    if label is None:
+        label = APP_NAME
     while True:
         try:
             if stdscr is None:
