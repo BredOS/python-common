@@ -475,7 +475,7 @@ def selector(
 
 
 def text_input(
-    prompt: str = "Input:",
+    prompt: str | list = "Input:",
     label: str | None = None,
     prefill: str = "",
     mask: bool = False,
@@ -490,6 +490,9 @@ def text_input(
         except EOFError:
             return
     wait_clear()
+    if isinstance(prompt, str):
+        prompt = [prompt]
+
     while True:
         try:
             buf = list(prefill)
@@ -523,15 +526,20 @@ def text_input(
                 )
                 stdscr.addstr(h - 2, content_x + 25, "Cancel", curses.A_BOLD)
                 draw_border()
-                stdscr.addstr(start_y, content_x, prompt, curses.A_BOLD)
+
+                for i in range(len(prompt)):
+                    stdscr.addstr(start_y + i, content_x, prompt[i], curses.A_BOLD)
 
                 display = "*" * len(buf) if mask else "".join(buf)
                 line = display.ljust(content_width)
                 stdscr.addstr(
-                    start_y + 1, content_x + 2, line[:content_width], curses.A_REVERSE
+                    start_y + len(prompt),
+                    content_x + 2,
+                    line[:content_width],
+                    curses.A_REVERSE,
                 )
 
-                stdscr.move(start_y + 1, content_x + 2 + cursor)
+                stdscr.move(start_y + len(prompt), content_x + 2 + cursor)
                 stdscr.refresh()
 
             while True:
