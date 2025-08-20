@@ -16,7 +16,6 @@
 #
 # SPDX-License-Identifier: GPL-3.0-or-later
 
-import time
 import os
 import random
 import string
@@ -27,7 +26,7 @@ import subprocess
 from pathlib import Path
 from threading import Lock
 from functools import wraps
-from time import monotonic
+from time import monotonic, perf_counter
 from typing import Iterator, Optional, Callable, Any
 from .logging import lrun, lp
 
@@ -143,9 +142,9 @@ def debounce(wait):
 def time_fn(func: Callable) -> Callable:
     @wraps(func)
     def wrapped(*args, **kwargs) -> Any:
-        start_time = time.perf_counter()  # More precise than time.time()
+        start_time = perf_counter()  # More precise than time.time()
         result = func(*args, **kwargs)
-        duration = time.perf_counter() - start_time
+        duration = perf_counter() - start_time
         lp(f"Function '{func.__name__}' took {duration:.4f} seconds to execute.")
         return result
 
@@ -181,7 +180,7 @@ def detect_device() -> str:
                 return product_name_file.read().rstrip("\n")
         except FileNotFoundError:
             return "unknown"
-        
+
 def detect_session_configuration() -> dict:
     """
     Detect the session configuration
@@ -272,7 +271,7 @@ class Elevator:
         code = f"""#!/usr/bin/env python3
 import os
 import sys
-import time
+from time import sleep
 import signal
 import subprocess
 
@@ -291,7 +290,7 @@ def watchdog() -> None:
     while True:
         if not parent_is_alive():
             sys.exit(0)
-        time.sleep(1)
+        sleep(1)
 
 threading.Thread(target=watchdog, daemon=True).start()
 
