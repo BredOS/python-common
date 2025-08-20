@@ -26,6 +26,7 @@ from functools import partial
 logger = None
 handler = None
 
+dryrun = False if "DO_DRYRUN" not in os.listdir() else True
 
 def setup_logging(
     logger_name: str,
@@ -152,56 +153,75 @@ def lp(message, mode="info") -> None:
     else:
         raise ValueError("Invalid mode.")
 
-
 def post_run_cmd(info, exitcode) -> None:
-    """
-    Post run function for commands. Checks if the command failed and raises an exception if it did.
-
-    Parameters:
-    - info: The output of the command
-    - exitcode: The exit code of the command
-
-    Returns: None
-    """
     if exitcode:
         lp(f"Command failed with exit code {exitcode}", mode="error")
         raise Exception(f"Command failed with exit code {exitcode}")
 
 
+def expected_to_fail(info, exitcode) -> None:
+    if exitcode:
+        lp(f"Command failed with exit code {exitcode}", mode="error")
+
+
 def lrun(
     cmd: list,
-    shell: bool = False,
+    force: bool = False,
     silent: bool = False,
+    shell: bool = False,
     cwd: str = ".",
     postrunfn: Callable = post_run_cmd,
+    wait=True,
 ) -> None:
     """
     Run a command and log the output
 
     Parameters:
     - cmd: The command to run
-    - shell: Whether to run the command in a shell. Default is False
+    - force: Whether to run the command even if dryrun is enabled. Default is False
     - silent: Whether to run the command silently. Default is False
+    - shell: Whether to run the command in a shell. Default is False
     - cwd: The working directory to run the command in. Default is "."
-
     Returns: None
     """
-    if shell:
-        new_cmd = " ".join(cmd)
-        Command.Shell(
-            new_cmd,
-            is_silent=silent,
-            working_directory=cwd,
-            post_run_function=partial(postrunfn),
-            do_send_output_to_post_run_function=True,
-            do_send_exit_code_to_post_run_function=True,
-        ).run_log_and_wait(logging_handler=handler)
+    if dryrun and not force:
+        lp("Would have run: " + " ".join(cmd))
     else:
-        Command(
-            cmd,
-            is_silent=silent,
-            working_directory=cwd,
-            post_run_function=partial(postrunfn),
-            do_send_output_to_post_run_function=True,
-            do_send_exit_code_to_post_run_function=True,
-        ).run_log_and_wait(logging_handler=handler)
+        if shell and wait:
+            new_cmd = " ".join(cmd)
+            Command.Shell(
+                new_cmd,
+                is_silent=silent,
+                working_directory=cwd,
+                post_run_function=partial(postrunfn),
+                do_send_output_to_post_run_function=True,
+                do_send_exit_code_to_post_run_function=True,
+            ).run_log_and_wait(logging_handler=handler)
+        elif shell and not wait:
+            new_cmd = " ".join(cmd)
+            Command.Shell(
+                new_cmd,
+                is_silent=silent,
+                working_directory=cwd,
+                post_run_function=partial(postrunfn),
+                do_send_output_to_post_run_function=True,
+                do_send_exit_code_to_post_run_function=True,
+            ).run_and_log(logging_handler=handler)
+        elif not shell and wait:
+            Command(
+                cmd,
+                is_silent=silent,
+                working_directory=cwd,
+                post_run_function=partial(postrunfn),
+                do_send_output_to_post_run_function=True,
+                do_send_exit_code_to_post_run_function=True,
+            ).run_log_and_wait(logging_handler=handler)
+        elif not shell and not wait:
+            Command(
+                cmd,
+                is_silent=silent,
+                working_directory=cwd,
+                post_run_function=partial(postrunfn),
+                do_send_output_to_post_run_function=True,
+                do_send_exit_code_to_post_run_function=True,
+            ).run_and_log(logging_handler=handler)

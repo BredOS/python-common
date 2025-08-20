@@ -16,6 +16,7 @@
 #
 # SPDX-License-Identifier: GPL-3.0-or-later
 
+import time
 import os
 import random
 import string
@@ -27,7 +28,8 @@ from pathlib import Path
 from threading import Lock
 from functools import wraps
 from time import monotonic
-from typing import Iterator, Optional
+from typing import Iterator, Optional, Callable, Any
+from .logging import lrun, lp
 
 
 class CommandStream:
@@ -138,6 +140,27 @@ def debounce(wait):
 
     return decorator
 
+def time_fn(func: Callable) -> Callable:
+    @wraps(func)
+    def wrapped(*args, **kwargs) -> Any:
+        start_time = time.perf_counter()  # More precise than time.time()
+        result = func(*args, **kwargs)
+        duration = time.perf_counter() - start_time
+        lp(f"Function '{func.__name__}' took {duration:.4f} seconds to execute.")
+        return result
+
+    return wrapped
+
+def catch_exceptions(func):
+    @wraps(func)
+    def wrapper(*args, **kwargs):
+        try:
+            return func(*args, **kwargs)
+        except Exception as e:
+            lp(f"Exception in {func.__name__}: {e}", mode="error")
+            raise e
+
+    return wrapper
 
 def detect_device() -> str:
     """
@@ -158,6 +181,38 @@ def detect_device() -> str:
                 return product_name_file.read().rstrip("\n")
         except FileNotFoundError:
             return "unknown"
+        
+def detect_session_configuration() -> dict:
+    """
+    Detect the session configuration
+
+    - Parameters:
+        - None
+
+    - Returns:
+        - dict: The session configuration
+    """
+    try:
+        xdg_session_type = os.environ.get("XDG_SESSION_TYPE")
+    except:
+        xdg_session_type = None
+    # Check for the XDG_CURRENT_DESKTOP environment variable and lowercase it
+    try:
+        xdg_current_desktop = os.environ.get("XDG_CURRENT_DESKTOP").lower()
+    except:
+        xdg_current_desktop = None
+    # look at where display-manager.service is symlinked to
+    try:
+        display_manager = os.path.basename(
+            os.path.realpath("/etc/systemd/system/display-manager.service")
+        ).replace(".service", "")
+    except:
+        display_manager = None
+
+    if xdg_session_type == "wayland":
+        return {"dm": display_manager, "de": xdg_current_desktop, "is_wayland": True}
+    else:
+        return {"dm": display_manager, "de": xdg_current_desktop, "is_wayland": False}
 
 
 def get_ram_size(unit: str = "KB") -> int:
